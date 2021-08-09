@@ -1,5 +1,5 @@
-sudo rm -f /usr/local/bin/vhdl2verilog
+sudo rm -f /usr/local/bin/vhd2sv
 cd src
 make
-sudo cp vhdl2verilog /usr/local/bin/
+sudo cp vhd2sv /usr/local/bin/
 make clean
