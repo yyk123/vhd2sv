@@ -38,9 +38,10 @@
  * =============================================================================
  * Author(s):
  *   Francisco Javier Reina Campo <frareicam@gmail.com>
+ *   yunkun yang <yangyk16@whu.edu.cn>
  */
 
-#include "vhdl2verilog.h"
+#include "vhd2sv.h"
 
 int yylexlinenum;
 int yywrap(void)
@@ -102,6 +103,9 @@ std_logic                       {yylval = MallocTcell(T_STDLOGIC, NULLSTR, yylex
 then                            {yylval = MallocTcell(T_THEN, NULLSTR, yylexlinenum); return(T_THEN);}
 to                              {yylval = MallocTcell(T_TO, NULLSTR, yylexlinenum); return(T_TO);}
 to_stdlogicvector               {yylval = MallocTcell(T_TOSTDLOGICVEC, NULLSTR, yylexlinenum); return(T_TOSTDLOGICVEC);}
+to_unsigned                     {yylval = MallocTcell(T_TOUNSIGNED, NULLSTR, yylexlinenum); return(T_TOUNSIGNED);}
+to_signed                       {yylval = MallocTcell(T_TOSIGNED, NULLSTR, yylexlinenum); return(T_TOSIGNED);}
+to_integer                      {yylval = MallocTcell(T_TOINTEGER, NULLSTR, yylexlinenum); return(T_TOINTEGER);}
 type                            {yylval = MallocTcell(T_TYPE, NULLSTR, yylexlinenum); return(T_TYPE);}
 unsigned                        {yylval = MallocTcell(T_UNSIGNED, NULLSTR, yylexlinenum); return(T_UNSIGNED);}
 use                             {yylval = MallocTcell(T_USE, NULLSTR, yylexlinenum); return(T_USE);}
@@ -110,12 +114,16 @@ when                            {yylval = MallocTcell(T_WHEN, NULLSTR, yylexline
 with                            {yylval = MallocTcell(T_WITH, NULLSTR, yylexlinenum); return(T_WITH);}
 xor                             {yylval = MallocTcell(T_XOR, NULLSTR, yylexlinenum); return(T_XOR);}
 --.*[\n]+                       { RegisterComment(CommentListTop, yytext, &yylexlinenum); }
-\n[\n]+                         { RegisterComment(CommentListTop, yytext, &yylexlinenum); }
 \n                              { yylexlinenum++; }
 [0-9]+                          {yylval = MallocTcell(T_DECDIGIT, yytext, yylexlinenum); return(T_DECDIGIT);}
 X['|\"][0-9A-Fa-fXxZz]+['|\"]   {yylval = MallocTcell(T_HEXDIGIT, yytext, yylexlinenum); return(T_HEXDIGIT);}
 ['|\"][0-1XxZz]+['|\"]          {yylval = MallocTcell(T_BINDIGIT, yytext, yylexlinenum); return(T_BINDIGIT);}
 [A-Za-z_.][A-Za-z0-9_.]*'event  {yylval = MallocTcell(T_EVENT, yytext, yylexlinenum); return(T_EVENT);}
+rising_edge                     {yylval = MallocTcell(T_CLK_POS, yytext, yylexlinenum); return(T_CLK_POS);}
+failing_edge                    {yylval = MallocTcell(T_CLK_NEG, yytext, yylexlinenum); return(T_CLK_NEG);}
+[A-Za-z_.][A-Za-z0-9_.]*'length {yylval = MallocTcell(T_ATTR_LENGTH, NULLSTR, yylexlinenum); return(T_ATTR_LENGTH);}
+[A-Za-z_.][A-Za-z0-9_.]*'left   {yylval = MallocTcell(T_ATTR_LEFT, NULLSTR, yylexlinenum); return(T_ATTR_LEFT);}
+[A-Za-z_.][A-Za-z0-9_.]*'right  {yylval = MallocTcell(T_ATTR_RIGHT, NULLSTR, yylexlinenum); return(T_ATTR_RIGHT);}
 [A-Za-z_.][A-Za-z0-9_.]*        {yylval = MallocTcell(T_ID, yytext, yylexlinenum); return(T_ID);}
 "("                             {yylval = MallocTcell(T_LPAREN, NULLSTR, yylexlinenum); return(T_LPAREN);}
 ")"                             {yylval = MallocTcell(T_RPAREN, NULLSTR, yylexlinenum); return(T_RPAREN);}
@@ -138,4 +146,5 @@ X['|\"][0-9A-Fa-fXxZz]+['|\"]   {yylval = MallocTcell(T_HEXDIGIT, yytext, yylexl
 &                               {yylval = MallocTcell(T_CONCAT, NULLSTR, yylexlinenum); return(T_CONCAT);}
 %%
 
+//\n[\n]+                         { RegisterComment(CommentListTop, yytext, &yylexlinenum); }
 // end of file

@@ -39,11 +39,11 @@
 ## ============================================================================= ##
 ## Author(s):                                                                    ##
 ##   Francisco Javier Reina Campo <frareicam@gmail.com>                          ##
-##                                                                               ##
+##   yunkun yang <yangyk16@whu.edu.cn>                                           ##
 ###################################################################################
 
-all : vhdl2verilog.h vhdl2verilog.c vhdlparse.tab.c lex.yy.c vhdlparse.tab.h
-	clang -O2 -o vhdl2verilog vhdl2verilog.c vhdlparse.tab.c lex.yy.c; rm vhdlparse.tab.c vhdlparse.tab.h lex.yy.c
+all : vhd2sv.h vhd2sv.c vhdlparse.tab.c lex.yy.c vhdlparse.tab.h
+	clang -O2 -o vhd2sv vhd2sv.c vhdlparse.tab.c lex.yy.c
 
 vhdlparse.tab.c vhdlparse.tab.h : vhdlparse.y
 	bison -d vhdlparse.y
@@ -52,4 +52,4 @@ lex.yy.c : vhdllex.l
 	flex -i vhdllex.l
 
 clean :
-	rm -f vhdlparse.tab.c vhdlparse.tab.h lex.yy.c vhdl2verilog
+	rm -f *.tab.c *.tab.h lex.yy.c vhd2sv

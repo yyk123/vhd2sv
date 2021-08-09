@@ -38,9 +38,10 @@
  * =============================================================================
  * Author(s):
  *   Francisco Javier Reina Campo <frareicam@gmail.com>
+ *   yunkun yang <yangyk16@whu.edu.cn>
  */
 
-#include "vhdl2verilog.h"
+#include "vhd2sv.h"
 void yyerror();
 static  TCELLPNT  ParseLastModule;
 
@@ -62,6 +63,8 @@ static  TCELLPNT  ParseLastModule;
 %token    T_END
 %token    T_ENTITY
 %token    T_EVENT
+%token    T_CLK_POS
+%token    T_CLK_NEG
 %token    T_FOR
 %token    T_FUNCTION
 %token    T_GENERATE
@@ -73,6 +76,9 @@ static  TCELLPNT  ParseLastModule;
 %token    T_IS
 %token    T_LIBRARY
 %token    T_LOOP
+%token    T_ATTR_LENGTH
+%token    T_ATTR_RIGHT
+%token    T_ATTR_LEFT
 %token    T_MAP
 %token    T_NULL
 %token    T_OF
@@ -91,6 +97,9 @@ static  TCELLPNT  ParseLastModule;
 %token    T_THEN
 %token    T_TO
 %token    T_TOSTDLOGICVEC
+%token    T_TOUNSIGNED
+%token    T_TOSIGNED
+%token    T_TOINTEGER
 %token    T_TYPE
 %token    T_UNSIGNED
 %token    T_USE
@@ -143,6 +152,7 @@ static  TCELLPNT  ParseLastModule;
 %token    N_TYPEID
 %token    N_FORLOOP
 %token    N_FORGENERATE
+%token    N_TYPEDEF_ARRAY
 
 %left      T_AND
 %left      T_OR
@@ -299,7 +309,7 @@ entity_part
 generic_part
   : T_GENERIC T_LPAREN parameter_part T_RPAREN T_SEMICOLON
     {  /* generic part: N_GENERICDEF info0=parameter */
-      $$ = $1; SetLine($$,CellLine($2)); SetType($$,N_GENERICDEF); SetInfo0($$,$3);
+      $$ = $1; SetLine($$,CellLine($5)); SetType($$,N_GENERICDEF); SetInfo0($$,$3);
       FreeTcell($2); FreeTcell($4); FreeTcell($5);
     }
   ;
@@ -318,22 +328,22 @@ parameter_part
 parameter_item
   : id_list T_COLON sigtype T_VARSUBST exp T_SEMICOLON
     {  /* parameter item: N_PARAMDEF info0=idlist, info1=sigtype, info2=defaultval */
-      $$ = MallocTcell(N_PARAMDEF,NULLSTR,0); SetLine($$,CellLine($1)); SetInfo0($$,$1); SetInfo1($$,$3); SetInfo2($$,$5);
+      $$ = MallocTcell(N_PARAMDEF,NULLSTR,0); SetLine($$,CellLine($6)); SetInfo0($$,$1); SetInfo1($$,$3); SetInfo2($$,$5);
       FreeTcell($2); FreeTcell($4); FreeTcell($6);
     }
   | id_list T_COLON sigtype T_VARSUBST exp
     {  /* parameter item: N_PARAMDEF info0=idlist, info1=sigtype, info2=defaultval */
-      $$ = MallocTcell(N_PARAMDEF,NULLSTR,0); SetLine($$,CellLine($1)); SetInfo0($$,$1); SetInfo1($$,$3); SetInfo2($$,$5);
+      $$ = MallocTcell(N_PARAMDEF,NULLSTR,0); SetLine($$,CellLine($5)); SetInfo0($$,$1); SetInfo1($$,$3); SetInfo2($$,$5);
       FreeTcell($2); FreeTcell($4);
     }
   | id_list T_COLON sigtype T_SEMICOLON
     {  /* parameter item: N_PARAMDEF info0=idlist, info1=sigtype, info2=defaultval(NULL) */
-      $$ = MallocTcell(N_PARAMDEF,NULLSTR,0); SetLine($$,CellLine($1)); SetInfo0($$,$1); SetInfo1($$,$3); SetInfo2($$,NULLCELL);
+      $$ = MallocTcell(N_PARAMDEF,NULLSTR,0); SetLine($$,CellLine($4)); SetInfo0($$,$1); SetInfo1($$,$3); SetInfo2($$,NULLCELL);
       FreeTcell($2); FreeTcell($4);
     }
   | id_list T_COLON sigtype
     {  /* parameter item: N_PARAMDEF info0=idlist, info1=sigtype, info2=defaultval(NULL) */
-      $$ = MallocTcell(N_PARAMDEF,NULLSTR,0); SetLine($$,CellLine($1)); SetInfo0($$,$1); SetInfo1($$,$3); SetInfo2($$,NULLCELL);
+      $$ = MallocTcell(N_PARAMDEF,NULLSTR,0); SetLine($$,CellLine($3)); SetInfo0($$,$1); SetInfo1($$,$3); SetInfo2($$,NULLCELL);
       FreeTcell($2);
     }
   ;
@@ -381,17 +391,21 @@ io_item
       $$ = MallocTcell(N_SIGDEF,NULLSTR,0); SetLine($$,CellLine($1)); SetInfo0($$,$1); SetInfo1($$,$3); SetInfo2($$,$4);
       FreeTcell($2);
     }
+  | id_list T_COLON sigdir sigtype T_VARSUBST exp T_SEMICOLON
+    {  /* signal item: N_SIGDEF info0=idlist, info1=sigdir, info2=sigtype */
+      $$ = MallocTcell(N_SIGDEF,NULLSTR,0); SetLine($$,CellLine($1)); SetInfo0($$,$1); SetInfo1($$,$3); SetInfo2($$,$4);
+      FreeTcell($2); FreeTcell($5); FreeTcell($6); FreeTcell($7);
+    }
   ;
 
 id_list
   : T_ID T_COMMA id_list
     {  /* signal/parameter names: N_IDLIST */
       $$ = $1; SetType($$,N_IDLIST); SetNext($$,$3);
-      FreeTcell($2);
     }
   | T_ID
     {  /* signal/parameter names: N_IDLIST */
-      $$ = $1; SetType($$,N_IDLIST); SetNext($$,NULLCELL);
+      $$ = $1; SetType($$,N_IDLIST); SetNext($$,NULLCELL); 
     }
   ;
 
@@ -423,6 +437,16 @@ sigtype
   | T_STDLOGICVEC
     {  /* stdlogicvec: T_STDLOGICVEC info0 = sigwidth(NULL) */
       $$ = $1; SetInfo0($$,NULLCELL);
+    }
+  | T_UNSIGNED  T_LPAREN sigwidth T_RPAREN
+    {  /* stdlogicvec: T_STDLOGICVEC info0 = sigwidth */
+      $$ = $1; SetLine($$,CellLine($2)); SetInfo0($$,$3);
+      FreeTcell($2); FreeTcell($4);
+    }
+  | T_SIGNED  T_LPAREN sigwidth T_RPAREN
+    {  /* stdlogicvec: T_STDLOGICVEC info0 = sigwidth */
+      $$ = $1; SetLine($$,CellLine($2)); SetInfo0($$,$3);
+      FreeTcell($2); FreeTcell($4);
     }
   | T_INTEGER T_RANGE sigwidth
     {  /* integer: T_INTEGER info0 = sigwidth */
@@ -541,15 +565,25 @@ declaration_part
   ;
 
 component_part
-  : T_COMPONENT T_ID generic_part port_part T_END T_COMPONENT T_SEMICOLON
+  : T_COMPONENT T_ID T_IS generic_part port_part T_END T_COMPONENT T_SEMICOLON
     {  /* (discard component declaration) */
       $$ = NULLCELL;
       FreeTcell($1); FreeTcell($2); FreeTree($3); FreeTree($4); FreeTcell($5); FreeTcell($6); FreeTcell($7);
     }
-  | T_COMPONENT T_ID port_part T_END T_COMPONENT T_SEMICOLON
+  | T_COMPONENT T_ID T_IS generic_part port_part T_END T_COMPONENT T_ID T_SEMICOLON
+    {  /* (discard component declaration) */
+      $$ = NULLCELL;
+      FreeTcell($1); FreeTcell($2); FreeTree($3); FreeTree($4); FreeTcell($5); FreeTcell($6); FreeTcell($7); FreeTcell($8);
+    }
+  | T_COMPONENT T_ID T_IS port_part T_END T_COMPONENT T_SEMICOLON
     {  /* (discard component declaration) */
       $$ = NULLCELL;
       FreeTcell($1); FreeTcell($2); FreeTree($3); FreeTcell($4); FreeTcell($5); FreeTcell($6);
+    }
+  | T_COMPONENT T_ID T_IS port_part T_END T_COMPONENT T_ID T_SEMICOLON
+    {  /* (discard component declaration) */
+      $$ = NULLCELL;
+      FreeTcell($1); FreeTcell($2); FreeTree($3); FreeTcell($4); FreeTcell($5); FreeTcell($6); FreeTcell($7);
     }
   ;
 
@@ -576,6 +610,18 @@ signal_part
       }
       FreeTcell($3); FreeTcell($5);
     }
+  | T_SIGNAL id_list T_COLON sigtype T_VARSUBST exp T_SEMICOLON
+    {  /* signal def: T_SIGNAL info0=idlist, info1=type */
+      $$ = $1; SetLine($$,CellLine($1)); SetInfo0($$,$2); SetInfo1($$,$4); SetInfo2($$,$6);
+      {
+        register TCELLPNT  item;
+        for (item = $2; item != NULLCELL; item = NextCell(item)) {
+          if (AppendSigList(ParseSigListTop,CellStr(item),$4,False,False,False,False) == False)  /* (wire) */
+            yyerror("$Duplicate signal declaration (Verilog is case sensitive).");
+        }
+      }
+      FreeTcell($3); FreeTcell($5); FreeTcell($7);
+    }
   ;
 
 typedef_part
@@ -601,7 +647,7 @@ type_item
     }
   | T_ARRAY T_LPAREN sigwidth T_RPAREN T_OF sigtype
     {  /* type def: T_ARRAY info0=width, info1=type */
-      $$ = $1; SetLine($$,CellLine($2)); SetInfo0($$,$3); SetInfo1($$,$6);
+      $$ = $1; SetLine($$,CellLine($2)); SetType($$, N_TYPEDEF_ARRAY); SetInfo0($$,$3); SetInfo1($$,$6);
       FreeTcell($2); FreeTcell($4); FreeTcell($5);
     }
   ;
@@ -1114,6 +1160,16 @@ edge_cond
       $$ = $3; SetLine($$,CellLine($1)); SetInfo0($$,$1);
       FreeTcell($2);
     }
+  | T_CLK_POS T_LPAREN T_ID T_RPAREN
+    {  /* event: T_EVENT info0=id */
+      $$ = $1; SetLine($$,CellLine($1)); SetInfo0($$,$3);
+      FreeTcell($2); FreeTcell($4);
+    }
+  | T_CLK_NEG T_LPAREN T_ID T_RPAREN
+    {  /* event: T_EVENT info0=id */
+      $$ = $1; SetLine($$,CellLine($1)); SetInfo0($$,$3);
+      FreeTcell($2); FreeTcell($4);
+    }
   ;
 
 case_part
@@ -1121,6 +1177,11 @@ case_part
     {  /* case: T_CASE info0=sig, info1=caseitem */
       $$ = $1; SetLine($$,CellLine($1)); SetInfo0($$,$2); SetInfo1($$,$4);
       FreeTcell($3); FreeTcell($5); FreeTcell($6); FreeTcell($7);
+    }
+  | T_CASE T_LPAREN signame T_RPAREN T_IS case_body T_END T_CASE T_SEMICOLON
+    {  /* case: T_CASE info0=sig, info1=caseitem */
+      $$ = $1; SetLine($$,CellLine($1)); SetInfo0($$,$3); SetInfo1($$,$6);
+       FreeTcell($2); FreeTcell($4); FreeTcell($7); FreeTcell($8); FreeTcell($9);
     }
   ;
 
@@ -1445,6 +1506,23 @@ literal
     {
       $$ = $1;
     }
+  | T_ATTR_LENGTH
+    {
+      $$ = $1;
+    }
+  | T_ATTR_LEFT
+    {
+      $$ = $1;
+    }
+  | T_ATTR_RIGHT
+    {
+      $$ = $1;
+    }
+  | T_LPAREN sigwidth T_PARSUBST T_BINDIGIT T_RPAREN
+    {  /* N_OTHERS info0=value */
+      $$ = $2; SetLine($$,CellLine($5)); SetType($$,N_OTHERS); SetInfo0($$,$4);
+      FreeTcell($1); FreeTcell($3); FreeTcell($5);
+    }
   | T_LPAREN T_OTHERS T_PARSUBST T_BINDIGIT T_RPAREN
     {  /* N_OTHERS info0=value */
       $$ = $2; SetLine($$,CellLine($5)); SetType($$,N_OTHERS); SetInfo0($$,$4);
@@ -1465,7 +1543,17 @@ literal
       $$ = $3; SetLine($$,CellLine($4)); 
       FreeTcell($1); FreeTcell($2); FreeTcell($4);
     }
+  | T_SIGNED T_LPAREN exp T_RPAREN
+    {  /* (signed) */
+      $$ = $3; SetLine($$,CellLine($4)); 
+      FreeTcell($1); FreeTcell($2); FreeTcell($4);
+    }
   | T_UNSIGNED T_LPAREN exp T_RPAREN
+    {  /* (unsigned) */
+      $$ = $3; SetLine($$,CellLine($4)); 
+      FreeTcell($1); FreeTcell($2); FreeTcell($4);
+    }
+  | T_STDLOGICVEC T_LPAREN exp T_RPAREN
     {  /* (unsigned) */
       $$ = $3; SetLine($$,CellLine($4)); 
       FreeTcell($1); FreeTcell($2); FreeTcell($4);
@@ -1474,6 +1562,23 @@ literal
     {  /* (to_stdlogicvector) */
       $$ = $3; SetLine($$,CellLine($4)); 
       FreeTcell($1); FreeTcell($2); FreeTcell($4);
+    }
+  | T_TOINTEGER T_LPAREN exp T_RPAREN
+    {  /* (to_integer) */
+      $$ = $3; SetLine($$,CellLine($4)); 
+      FreeTcell($1); FreeTcell($2); FreeTcell($4);
+    }
+  | T_TOUNSIGNED T_LPAREN exp T_COMMA exp T_RPAREN
+    {  /* (to_unsigned) */
+      $$ = $3; SetLine($$,CellLine($6)); 
+      FreeTcell($1); FreeTcell($2); FreeTcell($4);
+      FreeTree($5); FreeTcell($6);
+    }
+  | T_TOSIGNED T_LPAREN exp T_COMMA exp T_RPAREN
+    {  /* (to_signed) */
+      $$ = $3; SetLine($$,CellLine($6)); 
+      FreeTcell($1); FreeTcell($2); FreeTcell($4);
+      FreeTree($5); FreeTcell($6);
     }
   | T_CONVSTDVEC T_LPAREN exp T_COMMA exp T_RPAREN
     {  /* (conv_std_logicvector) */
@@ -1493,7 +1598,14 @@ literal
     }
   | T_ID T_LPAREN exp T_RPAREN
     {  /* N_STDELEMENT info0=ID, info1=exp */
-      $$ = $2; SetLine($$,CellLine($4)); SetType($$,N_STDELEMENT); SetInfo0($$,$1); SetInfo1($$,$3);
+      if(SearchSigList(ParseSigListTop, GetSigName($1)) != NULLSIG)
+      {
+        $$ = $2; SetLine($$,CellLine($4)); SetType($$,N_STDELEMENT); SetInfo0($$,$1); SetInfo1($$,$3);
+      }
+      else
+      {
+        $$ = $2; SetLine($$,CellLine($4)); SetType($$,N_CALLFUNC); SetInfo0($$,$1); SetInfo1($$,$3);  
+      }
       FreeTcell($4);
     }
   | T_ID

@@ -37,6 +37,7 @@
  * =============================================================================
  * Author(s):
  *   Francisco Javier Reina Campo <frareicam@gmail.com>
+ *   yunkun yang <yangyk16@whu.edu.cn>
  */
 
 #ifndef VHD2V_H
@@ -72,7 +73,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-#define TITLE "verilog2vhdl - QueenField\n"
+#define TITLE "vhd2sv - QueenField\n"
 
 typedef enum {
   True, False
